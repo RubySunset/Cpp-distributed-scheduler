@@ -14,7 +14,6 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <csignal>
-
 #include "task.h"
 
 class Master {
@@ -28,8 +27,14 @@ private:
     void accept_connections();
     void handle_worker(int worker_socket);
 
+    struct CompareTask {
+        bool operator()(const std::shared_ptr<Task>& a, const std::shared_ptr<Task>& b) {
+            return a->getPriority() > b->getPriority();
+        }
+    };
+
     int server_fd_;
-    std::queue<std::shared_ptr<Task>> task_queue_;
+    std::priority_queue<std::shared_ptr<Task>, std::vector<std::shared_ptr<Task>>, CompareTask> task_queue_;
     std::mutex task_queue_mutex_;
     std::condition_variable task_available_;
     std::atomic<bool> should_stop_;

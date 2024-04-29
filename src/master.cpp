@@ -1,4 +1,5 @@
 #include "master.h"
+#include <limits>
 
 Master::Master(int port) : should_stop_(false), server_fd_(-1) {
     server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -53,23 +54,29 @@ void Master::run() {
 
     while (!should_stop_) {
         int task_id;
-        std::cout << "Enter task ID (or -1 to quit): ";
-        if (std::cin >> task_id) {
+        int priority;
+        std::cout << "Enter task ID and priority (1-10), or -1 to quit: ";
+        if (std::cin >> task_id >> priority) {
             if (task_id == -1 || should_stop_) break;
 
-            {
-                std::lock_guard<std::mutex> lock(task_queue_mutex_);
-                task_queue_.push(std::make_shared<Task>(task_id, []() {}));
+            try {
+                auto new_task = std::make_shared<Task>(task_id, []() {}, priority);
+                {
+                    std::lock_guard<std::mutex> lock(task_queue_mutex_);
+                    task_queue_.push(new_task);
+                }
+                task_available_.notify_one();
+                std::cout << "Task " << task_id << " added with priority " << priority << std::endl;
+            } catch (const std::invalid_argument& e) {
+                std::cout << "Error: " << e.what() << std::endl;
             }
-            task_available_.notify_one();
         } else {
-            // Handle invalid input or EOF
             if (std::cin.eof() || should_stop_) {
                 break;
             }
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cout << "Invalid input. Please enter a number or -1 to quit." << std::endl;
+            std::cout << "Invalid input. Please enter a task ID and priority (1-10), or -1 to quit." << std::endl;
         }
     }
 
@@ -119,10 +126,11 @@ void Master::handle_worker(int worker_socket) {
                 const char* no_task_msg = "NO_TASK\n";
                 send(worker_socket, no_task_msg, strlen(no_task_msg), 0);
             } else {
-                auto task = task_queue_.front();
+                auto task = task_queue_.top();
                 task_queue_.pop();
                 std::string task_msg = std::to_string(task->getId()) + "\n";
                 send(worker_socket, task_msg.c_str(), task_msg.length(), 0);
+                std::cout << "Sent task " << task->getId() << " (priority " << task->getPriority() << ") to worker" << std::endl;
             }
         } else if (request.substr(0, 5) == "DONE ") {
             int task_id = std::stoi(request.substr(5));
