@@ -1,5 +1,4 @@
 #include "master.h"
-#include <limits>
 
 Master::Master(int port) : should_stop_(false), server_fd_(-1) {
     server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -61,12 +60,11 @@ void Master::run() {
 
             try {
                 auto new_task = std::make_shared<Task>(task_id, []() {}, priority);
-                {
-                    std::lock_guard<std::mutex> lock(task_queue_mutex_);
-                    task_queue_.push(new_task);
-                }
-                task_available_.notify_one();
+                load_balancer_.addTask(new_task);
                 std::cout << "Task " << task_id << " added with priority " << priority << std::endl;
+                
+                // Try to assign the task to a worker
+                assignTaskToWorker();
             } catch (const std::invalid_argument& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
@@ -86,6 +84,56 @@ void Master::run() {
     }
 }
 
+void Master::assignTaskToWorker() {
+    int worker_socket = load_balancer_.getAvailableWorker();
+    if (worker_socket != -1 && load_balancer_.hasTasks()) {
+        auto task = load_balancer_.getNextTask();
+        if (task) {
+            std::string task_msg = std::to_string(task->getId()) + "\n";
+            ssize_t sent = send(worker_socket, task_msg.c_str(), task_msg.length(), 0);
+            if (sent > 0) {
+                load_balancer_.assignTask(worker_socket, task);
+                std::cout << "Sent task " << task->getId() << " (priority " << task->getPriority() << ") to worker" << std::endl;
+            } else {
+                std::cerr << "Failed to send task to worker. Keeping in queue." << std::endl;
+                load_balancer_.addTask(task);
+            }
+        }
+    }
+}
+
+void Master::handle_worker(int worker_socket) {
+    char buffer[1024] = {0};
+    while (!should_stop_) {
+        int valread = read(worker_socket, buffer, 1024);
+        if (valread <= 0) {
+            std::cout << "Worker disconnected" << std::endl;
+            break;
+        }
+
+        std::string request(buffer);
+        memset(buffer, 0, sizeof(buffer));
+
+        if (request.substr(0, 5) == "LOAD ") {
+            int load = std::stoi(request.substr(5));
+            load_balancer_.updateWorkerLoad(worker_socket, load);
+            assignTaskToWorker();  // Try to assign a task after load update
+        } else if (request == "READY\n") {
+            assignTaskToWorker();  // Try to assign a task when worker is ready
+        } else if (request.substr(0, 5) == "DONE ") {
+            int task_id = std::stoi(request.substr(5));
+            std::cout << "Task " << task_id << " completed" << std::endl;
+            load_balancer_.updateWorkerLoad(worker_socket, 0);  // Reset worker load
+            assignTaskToWorker();  // Try to assign a new task
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
+    worker_sockets_.erase(std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket), worker_sockets_.end());
+    load_balancer_.removeWorker(worker_socket);
+    close(worker_socket);
+}
+
 void Master::accept_connections() {
     while (!should_stop_) {
         sockaddr_in address{};
@@ -102,43 +150,9 @@ void Master::accept_connections() {
             std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
             worker_sockets_.push_back(new_socket);
         }
+        load_balancer_.addWorker(new_socket);
 
         std::thread worker_thread(&Master::handle_worker, this, new_socket);
         worker_thread.detach();
     }
-}
-
-void Master::handle_worker(int worker_socket) {
-    char buffer[1024] = {0};
-    while (!should_stop_) {
-        int valread = read(worker_socket, buffer, 1024);
-        if (valread <= 0) {
-            std::cout << "Worker disconnected" << std::endl;
-            break;
-        }
-
-        std::string request(buffer);
-        memset(buffer, 0, sizeof(buffer));
-
-        if (request == "READY\n") {
-            std::unique_lock<std::mutex> lock(task_queue_mutex_);
-            if (task_queue_.empty()) {
-                const char* no_task_msg = "NO_TASK\n";
-                send(worker_socket, no_task_msg, strlen(no_task_msg), 0);
-            } else {
-                auto task = task_queue_.top();
-                task_queue_.pop();
-                std::string task_msg = std::to_string(task->getId()) + "\n";
-                send(worker_socket, task_msg.c_str(), task_msg.length(), 0);
-                std::cout << "Sent task " << task->getId() << " (priority " << task->getPriority() << ") to worker" << std::endl;
-            }
-        } else if (request.substr(0, 5) == "DONE ") {
-            int task_id = std::stoi(request.substr(5));
-            std::cout << "Task " << task_id << " completed" << std::endl;
-        }
-    }
-
-    std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
-    worker_sockets_.erase(std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket), worker_sockets_.end());
-    close(worker_socket);
 }

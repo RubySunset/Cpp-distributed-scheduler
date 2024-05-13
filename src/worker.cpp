@@ -1,6 +1,7 @@
 #include "worker.h"
 
-Worker::Worker(const std::string& master_address, int master_port) : should_stop_(false) {
+Worker::Worker(const std::string& master_address, int master_port)
+    : should_stop_(false), current_load_(0), rng_(std::random_device{}()), load_dist_(1, 10) {
     socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd_ == -1) {
         throw std::runtime_error("Failed to create socket");
@@ -31,15 +32,22 @@ void Worker::stop() {
     }
 }
 
+void Worker::updateLoad() {
+    current_load_ = load_dist_(rng_);
+}
+
+void Worker::reportLoad() {
+    std::string load_msg = "LOAD " + std::to_string(current_load_) + "\n";
+    send(socket_fd_, load_msg.c_str(), load_msg.length(), 0);
+}
+
 void Worker::run() {
     while (!should_stop_) {
-        // Request a task from the master
+        updateLoad();
+        reportLoad();
+
         const char* ready_msg = "READY\n";
-        ssize_t sent = send(socket_fd_, ready_msg, strlen(ready_msg), 0);
-        if (sent <= 0) {
-            std::cout << "Failed to send READY message, exiting" << std::endl;
-            break;
-        }
+        send(socket_fd_, ready_msg, strlen(ready_msg), 0);
 
         char buffer[1024] = {0};
         int valread = read(socket_fd_, buffer, 1024);
@@ -54,12 +62,10 @@ void Worker::run() {
             continue;
         }
 
-        // Execute the task
         int task_id = std::stoi(task_str);
         std::cout << "Worker executing task " << task_id << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 1000 + 500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(load_dist_(rng_) * 100));
 
-        // Report task completion
         std::string done_msg = "DONE " + std::to_string(task_id) + "\n";
         send(socket_fd_, done_msg.c_str(), done_msg.length(), 0);
     }

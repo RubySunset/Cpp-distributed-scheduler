@@ -6,15 +6,18 @@
 #include <memory>
 #include <vector>
 #include <atomic>
-#include <iostream>
 #include <thread>
+#include <iostream>
 #include <stdexcept>
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <csignal>
+#include <limits>
+
 #include "task.h"
+#include "load_balancer.h"
 
 class Master {
 public:
@@ -26,19 +29,12 @@ public:
 private:
     void accept_connections();
     void handle_worker(int worker_socket);
-
-    struct CompareTask {
-        bool operator()(const std::shared_ptr<Task>& a, const std::shared_ptr<Task>& b) {
-            return a->getPriority() > b->getPriority();
-        }
-    };
+    void assignTaskToWorker();
 
     int server_fd_;
-    std::priority_queue<std::shared_ptr<Task>, std::vector<std::shared_ptr<Task>>, CompareTask> task_queue_;
-    std::mutex task_queue_mutex_;
-    std::condition_variable task_available_;
     std::atomic<bool> should_stop_;
     std::vector<int> worker_sockets_;
     std::mutex worker_sockets_mutex_;
     std::thread accept_thread_;
+    LoadBalancer load_balancer_;
 };

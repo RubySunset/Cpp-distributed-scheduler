@@ -2,15 +2,15 @@
 
 #include <string>
 #include <atomic>
-#include <iostream>
 #include <thread>
 #include <chrono>
 #include <cstring>
 #include <stdexcept>
+#include <iostream>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <csignal>
+#include <random>
 
 class Worker {
 public:
@@ -22,4 +22,10 @@ public:
 private:
     int socket_fd_;
     std::atomic<bool> should_stop_;
+    std::atomic<int> current_load_;
+    std::mt19937 rng_;
+    std::uniform_int_distribution<> load_dist_;
+
+    void updateLoad();
+    void reportLoad();
 };
