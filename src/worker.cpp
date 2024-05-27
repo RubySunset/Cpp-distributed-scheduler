@@ -21,6 +21,9 @@ Worker::Worker(const std::string& master_address, int master_port)
 
 Worker::~Worker() {
     stop();
+    if (heartbeat_thread_.joinable()) {
+        heartbeat_thread_.join();
+    }
 }
 
 void Worker::stop() {
@@ -29,6 +32,14 @@ void Worker::stop() {
         shutdown(socket_fd_, SHUT_RDWR);
         close(socket_fd_);
         socket_fd_ = -1;
+    }
+}
+
+void Worker::sendHeartbeat() {
+    while (!should_stop_) {
+        const char* heartbeat_msg = "HEARTBEAT\n";
+        send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 }
 
@@ -41,7 +52,24 @@ void Worker::reportLoad() {
     send(socket_fd_, load_msg.c_str(), load_msg.length(), 0);
 }
 
+void Worker::executeTask(int task_id) {
+    // Simulate task execution
+    std::cout << "Worker executing task " << task_id << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(load_dist_(rng_) * 100));
+    
+    // Report task completion
+    std::string done_msg = "DONE " + std::to_string(task_id) + "\n";
+    ssize_t sent = send(socket_fd_, done_msg.c_str(), done_msg.length(), 0);
+    if (sent <= 0) {
+        std::cerr << "Failed to send completion message for task " << task_id << std::endl;
+    } else {
+        std::cout << "Worker sent completion message for task " << task_id << std::endl;
+    }
+}
+
 void Worker::run() {
+    heartbeat_thread_ = std::thread(&Worker::sendHeartbeat, this);
+
     while (!should_stop_) {
         updateLoad();
         reportLoad();
@@ -63,10 +91,10 @@ void Worker::run() {
         }
 
         int task_id = std::stoi(task_str);
-        std::cout << "Worker executing task " << task_id << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(load_dist_(rng_) * 100));
+        executeTask(task_id);  // Execute the task immediately
+    }
 
-        std::string done_msg = "DONE " + std::to_string(task_id) + "\n";
-        send(socket_fd_, done_msg.c_str(), done_msg.length(), 0);
+    if (heartbeat_thread_.joinable()) {
+        heartbeat_thread_.join();
     }
 }

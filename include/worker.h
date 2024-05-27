@@ -7,10 +7,12 @@
 #include <cstring>
 #include <stdexcept>
 #include <iostream>
+#include <random>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <random>
+#include <queue>
+#include <mutex>
 
 class Worker {
 public:
@@ -25,7 +27,12 @@ private:
     std::atomic<int> current_load_;
     std::mt19937 rng_;
     std::uniform_int_distribution<> load_dist_;
+    std::thread heartbeat_thread_;
+    std::queue<int> task_queue_;
+    std::mutex task_queue_mutex_;
 
+    void sendHeartbeat();
     void updateLoad();
     void reportLoad();
+    void executeTask(int task_id);
 };

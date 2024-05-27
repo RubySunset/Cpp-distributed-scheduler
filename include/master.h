@@ -15,9 +15,11 @@
 #include <unistd.h>
 #include <csignal>
 #include <limits>
+#include <sstream>
 
 #include "task.h"
 #include "load_balancer.h"
+#include "heartbeat_monitor.h"
 
 class Master {
 public:
@@ -30,6 +32,7 @@ private:
     void accept_connections();
     void handle_worker(int worker_socket);
     void assignTaskToWorker();
+    void handleWorkerFailure(int worker_socket);
 
     int server_fd_;
     std::atomic<bool> should_stop_;
@@ -37,4 +40,5 @@ private:
     std::mutex worker_sockets_mutex_;
     std::thread accept_thread_;
     LoadBalancer load_balancer_;
+    HeartbeatMonitor heartbeat_monitor_;
 };
