@@ -6,6 +6,7 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <iostream>
 
 class HeartbeatMonitor {
 public:

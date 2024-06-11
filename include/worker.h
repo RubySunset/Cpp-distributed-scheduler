@@ -24,7 +24,6 @@ public:
 private:
     int socket_fd_;
     std::atomic<bool> should_stop_;
-    std::atomic<int> current_load_;
     std::mt19937 rng_;
     std::uniform_int_distribution<> load_dist_;
     std::thread heartbeat_thread_;
@@ -32,7 +31,5 @@ private:
     std::mutex task_queue_mutex_;
 
     void sendHeartbeat();
-    void updateLoad();
-    void reportLoad();
     void executeTask(int task_id);
 };

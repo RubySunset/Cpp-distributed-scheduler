@@ -1,7 +1,7 @@
 #include "worker.h"
 
 Worker::Worker(const std::string& master_address, int master_port)
-    : should_stop_(false), current_load_(0), rng_(std::random_device{}()), load_dist_(1, 10) {
+    : should_stop_(false), rng_(std::random_device{}()), load_dist_(1, 10) {
     socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd_ == -1) {
         throw std::runtime_error("Failed to create socket");
@@ -21,13 +21,11 @@ Worker::Worker(const std::string& master_address, int master_port)
 
 Worker::~Worker() {
     stop();
-    if (heartbeat_thread_.joinable()) {
-        heartbeat_thread_.join();
-    }
 }
 
 void Worker::stop() {
     should_stop_ = true;
+    heartbeat_thread_.join();
     if (socket_fd_ != -1) {
         shutdown(socket_fd_, SHUT_RDWR);
         close(socket_fd_);
@@ -40,16 +38,8 @@ void Worker::sendHeartbeat() {
         const char* heartbeat_msg = "HEARTBEAT\n";
         send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
         std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::cout << "send heartbeat" << std::endl;
     }
-}
-
-void Worker::updateLoad() {
-    current_load_ = load_dist_(rng_);
-}
-
-void Worker::reportLoad() {
-    std::string load_msg = "LOAD " + std::to_string(current_load_) + "\n";
-    send(socket_fd_, load_msg.c_str(), load_msg.length(), 0);
 }
 
 void Worker::executeTask(int task_id) {
@@ -71,12 +61,6 @@ void Worker::run() {
     heartbeat_thread_ = std::thread(&Worker::sendHeartbeat, this);
 
     while (!should_stop_) {
-        updateLoad();
-        reportLoad();
-
-        const char* ready_msg = "READY\n";
-        send(socket_fd_, ready_msg, strlen(ready_msg), 0);
-
         char buffer[1024] = {0};
         int valread = read(socket_fd_, buffer, 1024);
         if (valread <= 0) {
@@ -92,9 +76,5 @@ void Worker::run() {
 
         int task_id = std::stoi(task_str);
         executeTask(task_id);  // Execute the task immediately
-    }
-
-    if (heartbeat_thread_.joinable()) {
-        heartbeat_thread_.join();
     }
 }

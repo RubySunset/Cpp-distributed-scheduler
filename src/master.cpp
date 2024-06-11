@@ -51,13 +51,15 @@ void Master::stop() {
         shutdown(socket, SHUT_RDWR);
         close(socket);
     }
-    worker_sockets_.clear();
 
+    accept_thread_.join();
     heartbeat_monitor_.stop();
+    load_balancer_.stopDispatchLoop();
 }
 
 void Master::run() {
     accept_thread_ = std::thread(&Master::accept_connections, this);
+    load_balancer_.startDispatchLoop();
 
     while (!should_stop_) {
         int task_id;
@@ -70,9 +72,6 @@ void Master::run() {
                 auto new_task = std::make_shared<Task>(task_id, []() {}, priority);
                 load_balancer_.addTask(new_task);
                 std::cout << "Task " << task_id << " added with priority " << priority << std::endl;
-                
-                // Try to assign the task to a worker
-                assignTaskToWorker();
             } catch (const std::invalid_argument& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
@@ -84,11 +83,6 @@ void Master::run() {
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             std::cout << "Invalid input. Please enter a task ID and priority (1-10), or -1 to quit." << std::endl;
         }
-    }
-
-    stop();
-    if (accept_thread_.joinable()) {
-        accept_thread_.join();
     }
 }
 
@@ -106,20 +100,11 @@ void Master::handle_worker(int worker_socket) {
         std::string line;
 
         while (std::getline(iss, line)) {
-            if (line.substr(0, 5) == "LOAD ") {
-                int load = std::stoi(line.substr(5));
-                load_balancer_.updateWorkerLoad(worker_socket, load);
-                heartbeat_monitor_.heartbeat(worker_socket);
-                assignTaskToWorker();
-            } else if (line == "READY") {
-                heartbeat_monitor_.heartbeat(worker_socket);
-                assignTaskToWorker();
-            } else if (line.substr(0, 5) == "DONE ") {
+            if (line.substr(0, 5) == "DONE ") {
                 int task_id = std::stoi(line.substr(5));
                 std::cout << "Task " << task_id << " completed by worker " << worker_socket << std::endl;
-                load_balancer_.updateWorkerLoad(worker_socket, 0);
+                load_balancer_.decLoad(worker_socket);
                 heartbeat_monitor_.heartbeat(worker_socket);
-                assignTaskToWorker();
             } else if (line == "HEARTBEAT") {
                 heartbeat_monitor_.heartbeat(worker_socket);
             } else {
@@ -131,36 +116,19 @@ void Master::handle_worker(int worker_socket) {
     }
 
     std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
-    worker_sockets_.erase(std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket), worker_sockets_.end());
+    std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket);
     load_balancer_.removeWorker(worker_socket);
     heartbeat_monitor_.removeWorker(worker_socket);
     close(worker_socket);
-}
-
-void Master::assignTaskToWorker() {
-    int worker_socket = load_balancer_.getAvailableWorker();
-    if (worker_socket != -1 && load_balancer_.hasTasks()) {
-        auto task = load_balancer_.getNextTask();
-        if (task) {
-            std::string task_msg = std::to_string(task->getId()) + "\n";
-            ssize_t sent = send(worker_socket, task_msg.c_str(), task_msg.length(), 0);
-            if (sent > 0) {
-                load_balancer_.assignTask(worker_socket, task);
-                std::cout << "Sent task " << task->getId() << " (priority " << task->getPriority() << ") to worker " << worker_socket << std::endl;
-            } else {
-                std::cerr << "Failed to send task to worker. Keeping in queue." << std::endl;
-                load_balancer_.addTask(task);
-            }
-        }
-    }
 }
 
 void Master::handleWorkerFailure(int worker_socket) {
     std::cout << "Worker " << worker_socket << " failed. Removing from system." << std::endl;
     
     std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
-    worker_sockets_.erase(std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket), worker_sockets_.end());
+    std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket);
     load_balancer_.removeWorker(worker_socket);
+    heartbeat_monitor_.removeWorker(worker_socket);
     close(worker_socket);
 }
 
@@ -185,5 +153,7 @@ void Master::accept_connections() {
 
         std::thread worker_thread(&Master::handle_worker, this, new_socket);
         worker_thread.detach();
+
+        std::cout << "Added new worker node" << std::endl;
     }
 }

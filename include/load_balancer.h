@@ -5,22 +5,36 @@
 #include <queue>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <iostream>
+#include <thread>
 
 #include "task.h"
+
+struct TaskComp {
+    bool operator()(const std::shared_ptr<Task> t1, const std::shared_ptr<Task> t2) const {
+        return t1->getPriority() < t2->getPriority();
+    }
+};
 
 class LoadBalancer {
 public:
     void addWorker(int worker_socket);
     void removeWorker(int worker_socket);
-    void updateWorkerLoad(int worker_socket, int load);
-    int getAvailableWorker();
-    void assignTask(int worker_socket, std::shared_ptr<Task> task);
-    std::shared_ptr<Task> getNextTask();
     void addTask(std::shared_ptr<Task> task);
-    bool hasTasks();
-
+    void startDispatchLoop();
+    void stopDispatchLoop();
+    void incLoad(int worker_socket);
+    void decLoad(int worker_socket);
 private:
+    bool canDispatch();
+    void dispatchLoop();
     std::unordered_map<int, int> worker_loads_;
-    std::queue<std::shared_ptr<Task>> task_queue_;
+    std::priority_queue<std::shared_ptr<Task>, std::vector<std::shared_ptr<Task>>, TaskComp> tasks;
     std::mutex mutex_;
+    std::condition_variable cv;
+    bool stop = false;
+    std::thread dispatch_thread;
 };

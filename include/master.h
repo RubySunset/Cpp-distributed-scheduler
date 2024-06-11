@@ -31,7 +31,6 @@ public:
 private:
     void accept_connections();
     void handle_worker(int worker_socket);
-    void assignTaskToWorker();
     void handleWorkerFailure(int worker_socket);
 
     int server_fd_;
@@ -39,6 +38,7 @@ private:
     std::vector<int> worker_sockets_;
     std::mutex worker_sockets_mutex_;
     std::thread accept_thread_;
+    std::thread dispatch_thread_;
     LoadBalancer load_balancer_;
     HeartbeatMonitor heartbeat_monitor_;
 };

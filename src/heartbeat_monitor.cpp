@@ -18,6 +18,7 @@ void HeartbeatMonitor::removeWorker(int worker_socket) {
 }
 
 void HeartbeatMonitor::heartbeat(int worker_socket) {
+    std::cout << "received heartbeat" << std::endl;
     std::lock_guard<std::mutex> lock(mutex_);
     last_heartbeats_[worker_socket] = std::chrono::steady_clock::now();
 }
