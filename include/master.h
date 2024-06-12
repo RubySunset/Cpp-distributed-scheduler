@@ -33,8 +33,9 @@ private:
     void handle_worker(int worker_socket);
     void handleWorkerFailure(int worker_socket);
 
-    int server_fd_;
-    std::atomic<bool> should_stop_;
+    int next_task_id = 0;
+    int server_fd_ = -1;
+    std::atomic<bool> should_stop_ = false;
     std::vector<int> worker_sockets_;
     std::mutex worker_sockets_mutex_;
     std::thread accept_thread_;

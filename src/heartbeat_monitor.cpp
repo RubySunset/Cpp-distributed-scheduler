@@ -8,18 +8,18 @@ HeartbeatMonitor::~HeartbeatMonitor() {
 }
 
 void HeartbeatMonitor::addWorker(int worker_socket) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     last_heartbeats_[worker_socket] = std::chrono::steady_clock::now();
 }
 
 void HeartbeatMonitor::removeWorker(int worker_socket) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     last_heartbeats_.erase(worker_socket);
 }
 
 void HeartbeatMonitor::heartbeat(int worker_socket) {
-    std::cout << "received heartbeat" << std::endl;
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::cout << "received heartbeat\n";
+    std::unique_lock<std::mutex> lock(mutex_);
     last_heartbeats_[worker_socket] = std::chrono::steady_clock::now();
 }
 
@@ -29,9 +29,7 @@ void HeartbeatMonitor::start() {
 
 void HeartbeatMonitor::stop() {
     should_stop_ = true;
-    if (monitor_thread_.joinable()) {
-        monitor_thread_.join();
-    }
+    monitor_thread_.join();
 }
 
 void HeartbeatMonitor::setFailureCallback(std::function<void(int)> callback) {
@@ -42,7 +40,7 @@ void HeartbeatMonitor::monitorLoop() {
     while (!should_stop_) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::mutex> lock(mutex_);
         auto now = std::chrono::steady_clock::now();
         
         for (auto it = last_heartbeats_.begin(); it != last_heartbeats_.end();) {

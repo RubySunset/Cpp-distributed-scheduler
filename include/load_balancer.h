@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <iostream>
 #include <thread>
+#include <algorithm>
 
 #include "task.h"
 

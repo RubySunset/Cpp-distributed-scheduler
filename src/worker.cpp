@@ -1,7 +1,6 @@
 #include "worker.h"
 
-Worker::Worker(const std::string& master_address, int master_port)
-    : should_stop_(false), rng_(std::random_device{}()), load_dist_(1, 10) {
+Worker::Worker(const std::string& master_address, int master_port) {
     socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd_ == -1) {
         throw std::runtime_error("Failed to create socket");
@@ -37,17 +36,15 @@ void Worker::sendHeartbeat() {
     while (!should_stop_) {
         const char* heartbeat_msg = "HEARTBEAT\n";
         send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
         std::cout << "send heartbeat" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 }
 
 void Worker::executeTask(int task_id) {
-    // Simulate task execution
     std::cout << "Worker executing task " << task_id << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(load_dist_(rng_) * 100));
     
-    // Report task completion
     std::string done_msg = "DONE " + std::to_string(task_id) + "\n";
     ssize_t sent = send(socket_fd_, done_msg.c_str(), done_msg.length(), 0);
     if (sent <= 0) {

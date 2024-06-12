@@ -1,6 +1,6 @@
 #include "master.h"
 
-Master::Master(int port) : should_stop_(false), server_fd_(-1), heartbeat_monitor_(std::chrono::seconds(10)) {
+Master::Master(int port) : heartbeat_monitor_(std::chrono::seconds(10)) {
     server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd_ == -1) {
         throw std::runtime_error("Failed to create socket");
@@ -32,10 +32,6 @@ Master::Master(int port) : should_stop_(false), server_fd_(-1), heartbeat_monito
 
 Master::~Master() {
     stop();
-    heartbeat_monitor_.stop();
-    if (accept_thread_.joinable()) {
-        accept_thread_.join();
-    }
 }
 
 void Master::stop() {
@@ -46,7 +42,7 @@ void Master::stop() {
         server_fd_ = -1;
     }
 
-    std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
+    std::unique_lock<std::mutex> lock(worker_sockets_mutex_);
     for (int socket : worker_sockets_) {
         shutdown(socket, SHUT_RDWR);
         close(socket);
@@ -62,16 +58,15 @@ void Master::run() {
     load_balancer_.startDispatchLoop();
 
     while (!should_stop_) {
-        int task_id;
         int priority;
-        std::cout << "Enter task ID and priority (1-10), or -1 to quit: ";
-        if (std::cin >> task_id >> priority) {
-            if (task_id == -1 || should_stop_) break;
+        std::cout << "Enter priority (1-10), or -1 to quit: ";
+        if (std::cin >> priority) {
+            if (priority == -1 || should_stop_) break;
 
             try {
-                auto new_task = std::make_shared<Task>(task_id, []() {}, priority);
+                auto new_task = std::make_shared<Task>(++next_task_id, []() {}, priority);
                 load_balancer_.addTask(new_task);
-                std::cout << "Task " << task_id << " added with priority " << priority << std::endl;
+                std::cout << "Task " << next_task_id << " added with priority " << priority << std::endl;
             } catch (const std::invalid_argument& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
@@ -81,7 +76,7 @@ void Master::run() {
             }
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cout << "Invalid input. Please enter a task ID and priority (1-10), or -1 to quit." << std::endl;
+            std::cout << "Invalid input. Please enter priority (1-10), or -1 to quit." << std::endl;
         }
     }
 }
@@ -115,7 +110,7 @@ void Master::handle_worker(int worker_socket) {
         memset(buffer, 0, sizeof(buffer));
     }
 
-    std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
+    std::unique_lock<std::mutex> lock(worker_sockets_mutex_);
     std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket);
     load_balancer_.removeWorker(worker_socket);
     heartbeat_monitor_.removeWorker(worker_socket);
@@ -125,7 +120,7 @@ void Master::handle_worker(int worker_socket) {
 void Master::handleWorkerFailure(int worker_socket) {
     std::cout << "Worker " << worker_socket << " failed. Removing from system." << std::endl;
     
-    std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
+    std::unique_lock<std::mutex> lock(worker_sockets_mutex_);
     std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket);
     load_balancer_.removeWorker(worker_socket);
     heartbeat_monitor_.removeWorker(worker_socket);
@@ -145,7 +140,7 @@ void Master::accept_connections() {
         }
 
         {
-            std::lock_guard<std::mutex> lock(worker_sockets_mutex_);
+            std::unique_lock<std::mutex> lock(worker_sockets_mutex_);
             worker_sockets_.push_back(new_socket);
         }
         load_balancer_.addWorker(new_socket);

@@ -1,5 +1,3 @@
-#include <algorithm>
-
 #include "load_balancer.h"
 
 void LoadBalancer::addWorker(int worker_socket) {
