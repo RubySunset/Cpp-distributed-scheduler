@@ -36,22 +36,33 @@ void Worker::sendHeartbeat() {
     while (!should_stop_) {
         const char* heartbeat_msg = "HEARTBEAT\n";
         send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
-        std::cout << "send heartbeat" << std::endl;
+        std::cout << "sent heartbeat\n";
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 }
 
-void Worker::executeTask(int task_id) {
-    std::cout << "Worker executing task " << task_id << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(load_dist_(rng_) * 100));
-    
-    std::string done_msg = "DONE " + std::to_string(task_id) + "\n";
-    ssize_t sent = send(socket_fd_, done_msg.c_str(), done_msg.length(), 0);
-    if (sent <= 0) {
-        std::cerr << "Failed to send completion message for task " << task_id << std::endl;
-    } else {
-        std::cout << "Worker sent completion message for task " << task_id << std::endl;
-    }
+void Worker::executeTask(std::shared_ptr<TaskRequest> request) {
+    std::thread t([=](){
+        std::cout << "worker executing task " << request->id << '\n';
+
+        // TODO replace this with some actual logic
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+        TaskResponse response{
+            request->id,
+            true,
+            "test"
+        };
+        std::string response_str = response.to_string();
+        
+        ssize_t sent = send(socket_fd_, response_str.c_str(), response_str.size(), 0);
+        if (sent <= 0) {
+            std::cerr << "failed to send completion message for task " << response.id << '\n';
+        } else {
+            std::cout << "worker sent completion message for task " << response.id << '\n';
+        }
+    });
+    t.detach();
 }
 
 void Worker::run() {
@@ -59,19 +70,19 @@ void Worker::run() {
 
     while (!should_stop_) {
         char buffer[1024] = {0};
-        int valread = read(socket_fd_, buffer, 1024);
+        int valread = read(socket_fd_, buffer, sizeof(buffer) - 1);
         if (valread <= 0) {
-            std::cout << "Master disconnected" << std::endl;
+            std::cout << "master disconnected\n";
             break;
         }
 
-        std::string task_str(buffer);
-        if (task_str == "NO_TASK\n") {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            continue;
-        }
+        buffer[valread] = '\0';  // Ensure null-termination
+        std::istringstream iss(buffer);
+        std::string line;
 
-        int task_id = std::stoi(task_str);
-        executeTask(task_id);  // Execute the task immediately
+        while (std::getline(iss, line)) {
+            auto request = std::make_shared<TaskRequest>(line);
+            executeTask(request);
+        }
     }
 }

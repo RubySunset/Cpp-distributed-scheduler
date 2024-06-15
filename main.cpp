@@ -9,17 +9,17 @@
 std::unique_ptr<Master> master_ptr;
 std::unique_ptr<Worker> worker_ptr;
 
-void signal_handler(int signum) {
-    std::cout << "\nInterrupt signal (" << signum << ") received.\n";
-    if (master_ptr) {
-        std::cout << "Stopping Master...\n";
-        master_ptr->stop();
-    }
-    if (worker_ptr) {
-        std::cout << "Stopping Worker...\n";
-        worker_ptr->stop();
-    }
-}
+// void signal_handler(int signum) {
+//     std::cout << "\nInterrupt signal (" << signum << ") received.\n";
+//     if (master_ptr) {
+//         std::cout << "Stopping Master...\n";
+//         master_ptr->stop();
+//     }
+//     if (worker_ptr) {
+//         std::cout << "Stopping Worker...\n";
+//         worker_ptr->stop();
+//     }
+// }
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -29,13 +29,30 @@ int main(int argc, char* argv[]) {
 
     std::string mode = argv[1];
 
-    // Register signal handler
-    std::signal(SIGINT, signal_handler);
+    // // Register signal handler
+    // std::signal(SIGINT, signal_handler);
 
     try {
         if (mode == "master") {
             master_ptr = std::make_unique<Master>(8080);
-            master_ptr->run();
+            // master_ptr->run();
+            int foo;
+            while (true) {
+                std::cin >> foo;
+                if (foo == -1) {
+                    break;
+                }
+                auto result = master_ptr->process(
+                    1,
+                    "func",
+                    std::unordered_map<std::string, std::string>{{"k1", "v1"}, {"k2", "v2"}}
+                );
+                if (result.has_value()) {
+                    std::cout << "return value = " << *result << '\n';
+                } else {
+                    std::cout << "error\n";
+                }
+            }
         } else if (mode == "worker" && argc == 4) {
             worker_ptr = std::make_unique<Worker>(argv[2], std::stoi(argv[3]));
             worker_ptr->run();
@@ -46,14 +63,6 @@ int main(int argc, char* argv[]) {
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
-    }
-
-    // Clean up
-    if (master_ptr) {
-        master_ptr.reset();
-    }
-    if (worker_ptr) {
-        worker_ptr.reset();
     }
 
     return 0;

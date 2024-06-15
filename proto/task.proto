@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package task;
+
+message TaskRequest {
+    int32 id = 1;
+    string function_name = 2;
+    map<string, string> arguments = 3;
+}
+
+message TaskResponse {
+    int32 id = 1;
+    bool success = 2;
+    string return_value = 3;
+}

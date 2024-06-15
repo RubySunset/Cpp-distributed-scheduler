@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <queue>
 #include <mutex>
+#include <sstream>
+
+#include "task.h"
 
 class Worker {
 public:
@@ -24,12 +27,10 @@ public:
 private:
     int socket_fd_;
     std::atomic<bool> should_stop_ = false;
-    std::default_random_engine rng_;
-    std::uniform_int_distribution<> load_dist_{1, 10};
     std::thread heartbeat_thread_;
     std::queue<int> task_queue_;
     std::mutex task_queue_mutex_;
 
     void sendHeartbeat();
-    void executeTask(int task_id);
+    void executeTask(std::shared_ptr<TaskRequest> request);
 };

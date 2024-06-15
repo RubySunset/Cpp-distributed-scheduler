@@ -12,7 +12,7 @@ void LoadBalancer::removeWorker(int worker_socket) {
     worker_loads_.erase(worker_socket);
 }
 
-void LoadBalancer::addTask(std::shared_ptr<Task> task) {
+void LoadBalancer::addTask(std::shared_ptr<TaskRequest> task) {
     std::unique_lock<std::mutex> lock(mutex_);
     tasks.push(task);
     lock.unlock();
@@ -28,7 +28,7 @@ void LoadBalancer::dispatchLoop() {
         if (stop) {
             break;
         }
-        std::shared_ptr<Task> task = tasks.top();
+        std::shared_ptr<TaskRequest> task = tasks.top();
         tasks.pop();
         int worker = std::min_element(
             worker_loads_.begin(),
@@ -38,13 +38,13 @@ void LoadBalancer::dispatchLoop() {
             }
         )->first;
         lock.unlock();
-        std::string task_msg = std::to_string(task->getId()) + "\n";
+        std::string task_msg = task->to_string() + "\n";
         ssize_t sent = send(worker, task_msg.c_str(), task_msg.length(), 0);
         if (sent > 0) {
             incLoad(worker);
-            std::cout << "Sent task " << task->getId() << " (priority " << task->getPriority() << ") to worker " << worker << std::endl;
+            std::cout << "sent task " << task->id << " to worker " << worker << '\n';
         } else {
-            std::cerr << "Failed to send task to worker. Keeping in queue." << std::endl;
+            std::cerr << "failed to send task to worker, keeping in queue\n";
             addTask(task);
         }
     }

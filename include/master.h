@@ -16,6 +16,7 @@
 #include <csignal>
 #include <limits>
 #include <sstream>
+#include <optional>
 
 #include "task.h"
 #include "load_balancer.h"
@@ -25,7 +26,8 @@ class Master {
 public:
     Master(int port);
     ~Master();
-    void run();
+    // void run();
+    std::optional<std::string> process(int priority, const std::string &function_name, const std::unordered_map<std::string, std::string> &arguments);
     void stop();
 
 private:
@@ -33,7 +35,7 @@ private:
     void handle_worker(int worker_socket);
     void handleWorkerFailure(int worker_socket);
 
-    int next_task_id = 0;
+    std::atomic<int> next_task_id = 0;
     int server_fd_ = -1;
     std::atomic<bool> should_stop_ = false;
     std::vector<int> worker_sockets_;
@@ -42,4 +44,7 @@ private:
     std::thread dispatch_thread_;
     LoadBalancer load_balancer_;
     HeartbeatMonitor heartbeat_monitor_;
+    std::unordered_map<int, std::shared_ptr<TaskResponse>> mailbox;
+    std::mutex mailbox_mut;
+    std::condition_variable mailbox_cv;
 };
