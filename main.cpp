@@ -42,16 +42,19 @@ int main(int argc, char* argv[]) {
                 if (foo == -1) {
                     break;
                 }
-                auto result = master_ptr->process(
-                    1,
-                    "func",
-                    std::unordered_map<std::string, std::string>{{"k1", "v1"}, {"k2", "v2"}}
-                );
-                if (result.has_value()) {
-                    std::cout << "return value = " << *result << '\n';
-                } else {
-                    std::cout << "error\n";
-                }
+                std::thread t{[](){
+                    auto result = master_ptr->process(
+                        1,
+                        "test",
+                        std::unordered_map<std::string, std::string>{{"k1", "v1"}, {"k2", "v2"}}
+                    );
+                    if (result.has_value()) {
+                        std::cout << "return value = " << *result << '\n';
+                    } else {
+                        std::cout << "error\n";
+                    }
+                }};
+                t.detach();
             }
         } else if (mode == "worker" && argc == 4) {
             worker_ptr = std::make_unique<Worker>(argv[2], std::stoi(argv[3]));

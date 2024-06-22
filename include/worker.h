@@ -16,6 +16,7 @@
 #include <sstream>
 
 #include "task.h"
+#include "task_router.h"
 
 class Worker {
 public:
@@ -30,6 +31,7 @@ private:
     std::thread heartbeat_thread_;
     std::queue<int> task_queue_;
     std::mutex task_queue_mutex_;
+    TaskRouter router;
 
     void sendHeartbeat();
     void executeTask(std::shared_ptr<TaskRequest> request);

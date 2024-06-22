@@ -12,13 +12,6 @@ protected:
     void TearDown() override {}
 };
 
-TEST_F(HeartbeatMonitorTest, AddAndRemoveWorker) {
-    hm.addWorker(4);
-    hm.removeWorker(4);
-    // Since we can't directly check internal state, we'll rely on the next test
-    // to indirectly verify this functionality
-}
-
 TEST_F(HeartbeatMonitorTest, HeartbeatAndFailure) {
     bool worker_failed = false;
     int failed_worker_id = -1;

@@ -25,6 +25,7 @@ Master::Master(int port) : heartbeat_monitor_(std::chrono::seconds(10)) {
     }
 
     heartbeat_monitor_.setFailureCallback([this](int worker_socket) {
+        std::cout << "heartbeat not detected\n";
         handleWorkerFailure(worker_socket);
     });
     heartbeat_monitor_.start();
@@ -131,21 +132,19 @@ void Master::handle_worker(int worker_socket) {
         memset(buffer, 0, sizeof(buffer));
     }
 
-    std::unique_lock<std::mutex> lock(worker_sockets_mutex_);
-    std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket);
-    load_balancer_.removeWorker(worker_socket);
-    heartbeat_monitor_.removeWorker(worker_socket);
-    close(worker_socket);
+    handleWorkerFailure(worker_socket);
 }
 
 void Master::handleWorkerFailure(int worker_socket) {
-    std::cout << "worker " << worker_socket << " failed, removing from system.\n";
-    
     std::unique_lock<std::mutex> lock(worker_sockets_mutex_);
-    std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket);
+    if (std::find(worker_sockets_.begin(), worker_sockets_.end(), worker_socket) == worker_sockets_.end()) {
+        return; // if this failure has already been handled, skip
+    }
+    worker_sockets_.erase(std::remove(worker_sockets_.begin(), worker_sockets_.end(), worker_socket), worker_sockets_.end());
     load_balancer_.removeWorker(worker_socket);
-    heartbeat_monitor_.removeWorker(worker_socket);
+    shutdown(worker_socket, SHUT_RDWR);
     close(worker_socket);
+    std::cout << "worker " << worker_socket << " failed, removing from system.\n";
 }
 
 void Master::accept_connections() {

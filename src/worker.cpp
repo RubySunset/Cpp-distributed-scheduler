@@ -13,8 +13,13 @@ Worker::Worker(const std::string& master_address, int master_port) {
         throw std::runtime_error("Invalid address / Address not supported");
     }
 
-    if (connect(socket_fd_, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        throw std::runtime_error("Connection failed");
+    int wait = 1;
+    while (connect(socket_fd_, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        std::cout << "connection to master failed, trying again in " << wait << " seconds\n";
+        std::this_thread::sleep_for(std::chrono::seconds(wait));
+        if (wait < 32) {
+            wait *= 2;
+        }
     }
 }
 
@@ -35,7 +40,12 @@ void Worker::stop() {
 void Worker::sendHeartbeat() {
     while (!should_stop_) {
         const char* heartbeat_msg = "HEARTBEAT\n";
-        send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
+        int num_sent = send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
+        if (num_sent <= 0) {
+            std::cout << "master disconnected\n";
+            should_stop_ = true;
+            break;
+        }
         std::cout << "sent heartbeat\n";
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
@@ -45,14 +55,24 @@ void Worker::executeTask(std::shared_ptr<TaskRequest> request) {
     std::thread t([=](){
         std::cout << "worker executing task " << request->id << '\n';
 
-        // TODO replace this with some actual logic
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        // TODO delay to make testing easier
+        std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        TaskResponse response{
-            request->id,
-            true,
-            "test"
-        };
+        TaskResponse response;
+        if (auto return_val = router.eval_route(*request); return_val.has_value()) {
+            response = {
+                request->id,
+                true,
+                *return_val
+            };
+        } else {
+            response = {
+                request->id,
+                false,
+                ""
+            };
+        }
+
         std::string response_str = response.to_string();
         
         ssize_t sent = send(socket_fd_, response_str.c_str(), response_str.size(), 0);

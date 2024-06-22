@@ -14,7 +14,6 @@ public:
     ~HeartbeatMonitor();
 
     void addWorker(int worker_socket);
-    void removeWorker(int worker_socket);
     void heartbeat(int worker_socket);
     void start();
     void stop();

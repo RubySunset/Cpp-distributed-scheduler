@@ -20,6 +20,7 @@ public:
 
 class TaskResponse {
 public:
+    TaskResponse() = default;
     TaskResponse(int id, bool success, const std::string &return_value);
     TaskResponse(const std::string &s);
     std::string to_string();
