@@ -26,13 +26,15 @@ public:
     void stop();
 
 private:
-    int socket_fd_;
+    int sock;
     std::atomic<bool> should_stop_ = false;
     std::thread heartbeat_thread_;
     std::queue<int> task_queue_;
     std::mutex task_queue_mutex_;
     TaskRouter router;
+    std::string server_buf;
 
     void sendHeartbeat();
     void executeTask(std::shared_ptr<TaskRequest> request);
+    bool read_msg();
 };

@@ -38,8 +38,11 @@ void LoadBalancer::dispatchLoop() {
             }
         )->first;
         lock.unlock();
-        std::string task_msg = task->to_string() + "\n";
-        ssize_t sent = send(worker, task_msg.c_str(), task_msg.length(), 0);
+        std::string task_msg = task->to_string();
+        uint32_t len = htonl(static_cast<uint32_t>(task_msg.size()));
+        std::string len_msg(reinterpret_cast<char*>(&len), 4);
+        std::string total_msg = len_msg + task_msg;
+        ssize_t sent = send(worker, total_msg.c_str(), total_msg.size(), 0);
         if (sent > 0) {
             incLoad(worker);
             std::cout << "sent task " << task->id << " to worker " << worker << '\n';

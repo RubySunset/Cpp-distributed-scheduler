@@ -1,8 +1,8 @@
 #include "worker.h"
 
 Worker::Worker(const std::string& master_address, int master_port) {
-    socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd_ == -1) {
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == -1) {
         throw std::runtime_error("Failed to create socket");
     }
 
@@ -14,7 +14,7 @@ Worker::Worker(const std::string& master_address, int master_port) {
     }
 
     int wait = 1;
-    while (connect(socket_fd_, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    while (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         std::cout << "connection to master failed, trying again in " << wait << " seconds\n";
         std::this_thread::sleep_for(std::chrono::seconds(wait));
         if (wait < 32) {
@@ -30,17 +30,17 @@ Worker::~Worker() {
 void Worker::stop() {
     should_stop_ = true;
     heartbeat_thread_.join();
-    if (socket_fd_ != -1) {
-        shutdown(socket_fd_, SHUT_RDWR);
-        close(socket_fd_);
-        socket_fd_ = -1;
+    if (sock != -1) {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+        sock = -1;
     }
 }
 
 void Worker::sendHeartbeat() {
     while (!should_stop_) {
-        const char* heartbeat_msg = "HEARTBEAT\n";
-        int num_sent = send(socket_fd_, heartbeat_msg, strlen(heartbeat_msg), 0);
+        const char* heartbeat_msg = "\0\0\0\0";
+        int num_sent = send(sock, heartbeat_msg, 4, 0);
         if (num_sent <= 0) {
             std::cout << "master disconnected\n";
             should_stop_ = true;
@@ -74,8 +74,11 @@ void Worker::executeTask(std::shared_ptr<TaskRequest> request) {
         }
 
         std::string response_str = response.to_string();
+        uint32_t len = htonl(static_cast<uint32_t>(response_str.size()));
+        std::string len_str(reinterpret_cast<char*>(&len), 4);
+        std::string total_str = len_str + response_str;
         
-        ssize_t sent = send(socket_fd_, response_str.c_str(), response_str.size(), 0);
+        ssize_t sent = send(sock, total_str.c_str(), total_str.size(), 0);
         if (sent <= 0) {
             std::cerr << "failed to send completion message for task " << response.id << '\n';
         } else {
@@ -89,20 +92,31 @@ void Worker::run() {
     heartbeat_thread_ = std::thread(&Worker::sendHeartbeat, this);
 
     while (!should_stop_) {
-        char buffer[1024] = {0};
-        int valread = read(socket_fd_, buffer, sizeof(buffer) - 1);
-        if (valread <= 0) {
+        char buffer[4096];
+        int bytes_read = read(sock, buffer, sizeof(buffer));
+        if (bytes_read <= 0) {
             std::cout << "master disconnected\n";
             break;
         }
-
-        buffer[valread] = '\0';  // Ensure null-termination
-        std::istringstream iss(buffer);
-        std::string line;
-
-        while (std::getline(iss, line)) {
-            auto request = std::make_shared<TaskRequest>(line);
-            executeTask(request);
-        }
+        std::string message(buffer, bytes_read);
+        server_buf += message;
+        while (read_msg()) {}
     }
+}
+
+bool Worker::read_msg() {
+    if (server_buf.size() < 4) {
+        return false;
+    }
+    uint32_t len;
+    std::memcpy(&len, server_buf.data(), 4);
+    uint32_t host_len = ntohl(len);
+    if (server_buf.size() < 4 + host_len) {
+        return false;
+    }
+    std::string message = server_buf.substr(4, host_len);
+    server_buf.erase(0, 4 + host_len);
+    auto task_ptr = std::make_shared<TaskRequest>(message);
+    executeTask(task_ptr);
+    return true;
 }

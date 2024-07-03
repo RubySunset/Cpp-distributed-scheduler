@@ -11,6 +11,9 @@
 #include <iostream>
 #include <thread>
 #include <algorithm>
+#include <cstring>
+#include <unistd.h>
+#include <cstdint>
 
 #include "task.h"
 

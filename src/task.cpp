@@ -14,8 +14,8 @@ TaskRequest::TaskRequest(
 
 TaskRequest::TaskRequest(const std::string &s) {
     task::TaskRequest request;
-    std::string decoded_str = base64_decode(s);
-    request.ParseFromString(decoded_str);
+    // std::string decoded_str = base64_decode(s);
+    request.ParseFromString(s);
     id = request.id();
     function_name = request.function_name();
     for (auto& [k, v] : request.arguments()) {
@@ -32,7 +32,8 @@ std::string TaskRequest::to_string() {
     }
     std::string raw_str;
     request.SerializeToString(&raw_str);
-    return base64_encode(raw_str);
+    // return base64_encode(raw_str);
+    return raw_str;
 }
 
 TaskResponse::TaskResponse(int id, bool success, const std::string &return_value) {
@@ -43,8 +44,8 @@ TaskResponse::TaskResponse(int id, bool success, const std::string &return_value
 
 TaskResponse::TaskResponse(const std::string &s) {
     task::TaskResponse response;
-    std::string decoded_str = base64_decode(s);
-    response.ParseFromString(decoded_str);
+    // std::string decoded_str = base64_decode(s);
+    response.ParseFromString(s);
     id = response.id();
     success = response.success();
     return_value = response.return_value();
@@ -57,5 +58,6 @@ std::string TaskResponse::to_string() {
     response.set_return_value(return_value);
     std::string raw_str;
     response.SerializeToString(&raw_str);
-    return base64_encode(raw_str);
+    // return base64_encode(raw_str);
+    return raw_str;
 }

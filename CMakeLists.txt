@@ -18,6 +18,11 @@ add_executable(main "main.cpp")
 target_link_libraries(main Sources)
 set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
+# Link profiler exec to libraries
+add_executable(prof "profile_test.cpp")
+target_link_libraries(prof Sources)
+set_target_properties(prof PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+
 # Everything below is for GoogleTest tests
 
 # include(FetchContent)
