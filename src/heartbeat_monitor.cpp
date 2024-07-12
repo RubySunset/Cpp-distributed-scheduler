@@ -4,7 +4,9 @@ HeartbeatMonitor::HeartbeatMonitor(std::chrono::seconds timeout)
     : timeout_(timeout), should_stop_(false) {}
 
 HeartbeatMonitor::~HeartbeatMonitor() {
-    stop();
+    if (monitor_thread_.joinable()) {
+        stop();
+    }
 }
 
 void HeartbeatMonitor::addWorker(int worker_socket) {

@@ -7,20 +7,14 @@ protected:
     void TearDown() override {}
 };
 
-TEST_F(TaskTest, ConstructorAndGetters) {
-    Task task(1, [](){}, 5);
-    EXPECT_EQ(task.getId(), 1);
-    EXPECT_EQ(task.getPriority(), 5);
+TEST_F(TaskTest, TaskRequestSerialization) {
+    TaskRequest request{3, 10, "func", std::unordered_map<std::string, std::string>{{"name1", "arg1"}, {"name2", "arg2"}}};
+    TaskRequest recovered_request(request.to_string());
+    ASSERT_EQ(request, recovered_request);
 }
 
-TEST_F(TaskTest, Execute) {
-    bool executed = false;
-    Task task(1, [&executed](){ executed = true; }, 5);
-    task.execute();
-    EXPECT_TRUE(executed);
-}
-
-TEST_F(TaskTest, InvalidPriority) {
-    EXPECT_THROW(Task(1, [](){}, 0), std::invalid_argument);
-    EXPECT_THROW(Task(1, [](){}, 11), std::invalid_argument);
+TEST_F(TaskTest, TaskResponseSerialization) {
+    TaskResponse response{3, true, "return_val"};
+    TaskResponse recovered_response(response.to_string());
+    ASSERT_EQ(response, recovered_response);
 }

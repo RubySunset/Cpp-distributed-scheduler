@@ -16,6 +16,8 @@ public:
     int priority;
     std::string function_name;
     std::unordered_map<std::string, std::string> arguments; // arguments represented as key-value pairs
+
+    friend bool operator==(const TaskRequest &r1, const TaskRequest &r2);
 };
 
 class TaskResponse {
@@ -28,4 +30,6 @@ public:
     int id;
     bool success;
     std::string return_value;
+    
+    friend bool operator==(const TaskResponse &r1, const TaskResponse &r2);
 };

@@ -25,6 +25,8 @@ struct TaskComp {
 
 class LoadBalancer {
 public:
+    void set_dispatch_callback(std::function<void(int, std::shared_ptr<TaskRequest>)> callback);
+    void set_default_dispatch_callback();
     void addWorker(int worker_socket);
     void removeWorker(int worker_socket);
     void addTask(std::shared_ptr<TaskRequest> task);
@@ -39,6 +41,7 @@ private:
     std::priority_queue<std::shared_ptr<TaskRequest>, std::vector<std::shared_ptr<TaskRequest>>, TaskComp> tasks;
     std::mutex mutex_;
     std::condition_variable cv;
-    bool stop = false;
+    std::atomic<bool> stop = false;
     std::thread dispatch_thread;
+    std::function<void(int, std::shared_ptr<TaskRequest>)> dispatch_callback;
 };

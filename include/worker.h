@@ -33,6 +33,7 @@ private:
     std::mutex task_queue_mutex_;
     TaskRouter router;
     std::string server_buf;
+    std::atomic<bool> stopped = false;
 
     void sendHeartbeat();
     void executeTask(std::shared_ptr<TaskRequest> request);

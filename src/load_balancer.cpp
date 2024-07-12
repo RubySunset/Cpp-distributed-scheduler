@@ -1,5 +1,26 @@
 #include "load_balancer.h"
 
+void LoadBalancer::set_dispatch_callback(std::function<void(int, std::shared_ptr<TaskRequest>)> callback) {
+    dispatch_callback = std::move(callback);
+}
+
+void LoadBalancer::set_default_dispatch_callback() {
+    dispatch_callback = [this](int worker, std::shared_ptr<TaskRequest> task) {
+        std::string task_msg = task->to_string();
+        uint32_t len = htonl(static_cast<uint32_t>(task_msg.size()));
+        std::string len_msg(reinterpret_cast<char*>(&len), 4);
+        std::string total_msg = len_msg + task_msg;
+        ssize_t sent = send(worker, total_msg.c_str(), total_msg.size(), 0);
+        if (sent > 0) {
+            incLoad(worker);
+            std::cout << "sent task " << task->id << " to worker " << worker << '\n';
+        } else {
+            std::cerr << "failed to send task to worker, keeping in queue\n";
+            addTask(task);
+        }
+    };
+}
+
 void LoadBalancer::addWorker(int worker_socket) {
     std::unique_lock<std::mutex> lock(mutex_);
     worker_loads_[worker_socket] = 0;
@@ -38,18 +59,7 @@ void LoadBalancer::dispatchLoop() {
             }
         )->first;
         lock.unlock();
-        std::string task_msg = task->to_string();
-        uint32_t len = htonl(static_cast<uint32_t>(task_msg.size()));
-        std::string len_msg(reinterpret_cast<char*>(&len), 4);
-        std::string total_msg = len_msg + task_msg;
-        ssize_t sent = send(worker, total_msg.c_str(), total_msg.size(), 0);
-        if (sent > 0) {
-            incLoad(worker);
-            std::cout << "sent task " << task->id << " to worker " << worker << '\n';
-        } else {
-            std::cerr << "failed to send task to worker, keeping in queue\n";
-            addTask(task);
-        }
+        dispatch_callback(worker, task);
     }
 }
 

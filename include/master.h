@@ -43,6 +43,7 @@ private:
     std::atomic<int> next_task_id = 0;
     int server_fd, epoll_fd;
     std::atomic<bool> should_stop = false;
+    std::atomic<bool> stopped = false;
     std::vector<int> worker_sockets;
     std::mutex worker_sockets_mutex;
     std::thread accept_thread;

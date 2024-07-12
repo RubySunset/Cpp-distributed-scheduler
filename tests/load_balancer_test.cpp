@@ -4,39 +4,56 @@
 class LoadBalancerTest : public ::testing::Test {
 protected:
     LoadBalancer lb;
+    int assigned_worker = -1;
+    int assigned_task = -1;
     void SetUp() override {
-        lb.addWorker(1);
-        lb.addWorker(2);
-        lb.addWorker(3);
+        lb.set_dispatch_callback([this](int worker, std::shared_ptr<TaskRequest> request){
+            if (assigned_worker == -1) {
+                assigned_worker = worker;
+                assigned_task = request->id;
+            }
+        });
+        lb.startDispatchLoop();
     }
-    void TearDown() override {}
+    void TearDown() override {
+        lb.stopDispatchLoop();
+    }
 };
 
-// TEST_F(LoadBalancerTest, AddAndRemoveWorker) {
-//     lb.addWorker(4);
-//     EXPECT_EQ(lb.getAvailableWorker(), 4);
-//     lb.removeWorker(4);
-//     EXPECT_NE(lb.getAvailableWorker(), 4);
-// }
+TEST_F(LoadBalancerTest, DispatchTask) {
+    lb.addWorker(1);
+    lb.addTask(std::make_shared<TaskRequest>(1, 1, "func", std::unordered_map<std::string, std::string>{}));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_EQ(assigned_worker, 1);
+    ASSERT_EQ(assigned_task, 1);
+}
 
-// TEST_F(LoadBalancerTest, UpdateWorkerLoad) {
-//     for (int i = 0; i < 5; ++i) {
-//         lb.incLoad(1);
-//     }
-//     for (int i = 0; i < 3; ++i) {
-//         lb.incLoad(2);
-//     }
-//     for (int i = 0; i < 7; ++i) {
-//         lb.incLoad(3);
-//     }
-//     EXPECT_EQ(lb.getAvailableWorker(), 2);
-// }
+TEST_F(LoadBalancerTest, DispatchTaskPriority) {
+    lb.addTask(std::make_shared<TaskRequest>(1, 1, "func", std::unordered_map<std::string, std::string>{}));
+    lb.addTask(std::make_shared<TaskRequest>(2, 2, "func", std::unordered_map<std::string, std::string>{}));
+    lb.addWorker(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_EQ(assigned_worker, 1);
+    ASSERT_EQ(assigned_task, 2);
+}
 
-// TEST_F(LoadBalancerTest, AssignAndGetTask) {
-//     auto task = std::make_shared<Task>(1, [](){}, 5);
-//     lb.addTask(task);
-//     EXPECT_TRUE(lb.hasTasks());
-//     auto assigned_task = lb.getNextTask();
-//     EXPECT_EQ(assigned_task->getId(), 1);
-//     EXPECT_FALSE(lb.hasTasks());
-// }
+TEST_F(LoadBalancerTest, DispatchTaskWorkerLoad) {
+    lb.addWorker(1);
+    lb.addWorker(2);
+    lb.incLoad(2);
+    lb.addTask(std::make_shared<TaskRequest>(1, 1, "func", std::unordered_map<std::string, std::string>{}));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_EQ(assigned_worker, 1);
+    ASSERT_EQ(assigned_task, 1);
+}
+
+TEST_F(LoadBalancerTest, DispatchTaskNoWorker) {
+    lb.addWorker(1);
+    for (int i = 0; i < 100; ++i) {
+        lb.incLoad(1);
+    }
+    lb.addTask(std::make_shared<TaskRequest>(1, 1, "func", std::unordered_map<std::string, std::string>{}));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_EQ(assigned_worker, -1);
+    ASSERT_EQ(assigned_task, -1);
+}

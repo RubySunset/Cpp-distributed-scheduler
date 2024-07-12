@@ -42,15 +42,24 @@ Master::Master(int port) : heartbeat_monitor(std::chrono::seconds(10)) {
     heartbeat_monitor.start();
 
     accept_thread = std::thread(&Master::accept_connections, this);
+    load_balancer.set_default_dispatch_callback();
     load_balancer.startDispatchLoop();
 }
 
 Master::~Master() {
-    stop();
+    if (!stopped) {
+        stop();
+    }
 }
 
 void Master::stop() {
     should_stop = true;
+    if (accept_thread.joinable()) {
+        accept_thread.join();
+    }
+    heartbeat_monitor.stop();
+    load_balancer.stopDispatchLoop();
+
     if (server_fd != -1) {
         shutdown(server_fd, SHUT_RDWR);
         close(server_fd);
@@ -65,9 +74,7 @@ void Master::stop() {
 
     close(epoll_fd);
 
-    accept_thread.join();
-    heartbeat_monitor.stop();
-    load_balancer.stopDispatchLoop();
+    stopped = true;
 }
 
 std::optional<std::string> Master::process(

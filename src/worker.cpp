@@ -24,17 +24,22 @@ Worker::Worker(const std::string& master_address, int master_port) {
 }
 
 Worker::~Worker() {
-    stop();
+    if (!stopped) {
+        stop();
+    }
 }
 
 void Worker::stop() {
     should_stop_ = true;
-    heartbeat_thread_.join();
+    if (heartbeat_thread_.joinable()) {
+        heartbeat_thread_.join();
+    }
     if (sock != -1) {
         shutdown(sock, SHUT_RDWR);
         close(sock);
         sock = -1;
     }
+    stopped = true;
 }
 
 void Worker::sendHeartbeat() {
@@ -47,7 +52,7 @@ void Worker::sendHeartbeat() {
             break;
         }
         std::cout << "sent heartbeat\n";
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
 
@@ -56,7 +61,7 @@ void Worker::executeTask(std::shared_ptr<TaskRequest> request) {
         std::cout << "worker executing task " << request->id << '\n';
 
         // TODO delay to make testing easier
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // std::this_thread::sleep_for(std::chrono::seconds(2));
 
         TaskResponse response;
         if (auto return_val = router.eval_route(*request); return_val.has_value()) {
@@ -96,6 +101,7 @@ void Worker::run() {
         int bytes_read = read(sock, buffer, sizeof(buffer));
         if (bytes_read <= 0) {
             std::cout << "master disconnected\n";
+            should_stop_ = true;
             break;
         }
         std::string message(buffer, bytes_read);

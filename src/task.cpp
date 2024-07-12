@@ -36,6 +36,12 @@ std::string TaskRequest::to_string() {
     return raw_str;
 }
 
+bool operator==(const TaskRequest &r1, const TaskRequest &r2) {
+    return r1.id == r2.id && r1.function_name == r2.function_name && r1.arguments == r2.arguments;
+    // note that priority is not considered part of equality since it's not transmitted via protobuf
+    // (priority is purely for master-side scheduling, the workers don't know anything about it)
+}
+
 TaskResponse::TaskResponse(int id, bool success, const std::string &return_value) {
     this->id = id;
     this->success = success;
@@ -60,4 +66,8 @@ std::string TaskResponse::to_string() {
     response.SerializeToString(&raw_str);
     // return base64_encode(raw_str);
     return raw_str;
+}
+
+bool operator==(const TaskResponse &r1, const TaskResponse &r2) {
+    return r1.id == r2.id && r1.success == r2.success && r1.return_value == r2.return_value;
 }
