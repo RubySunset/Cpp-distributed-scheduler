@@ -34,6 +34,7 @@ public:
     void stopDispatchLoop();
     void incLoad(int worker_socket);
     void decLoad(int worker_socket);
+    void complete_task(int worker, int task_id);
 private:
     bool canDispatch();
     void dispatchLoop();
@@ -44,4 +45,5 @@ private:
     std::atomic<bool> stop = false;
     std::thread dispatch_thread;
     std::function<void(int, std::shared_ptr<TaskRequest>)> dispatch_callback;
+    std::unordered_map<int, std::vector<std::shared_ptr<TaskRequest>>> dispatched_tasks;
 };

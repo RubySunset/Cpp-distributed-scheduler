@@ -135,6 +135,7 @@ void Master::handle_client(int fd, const std::string &message) {
     auto response = std::make_shared<TaskResponse>(message);
     std::cout << "task " << response->id << " completed by worker " << fd << "\n";
     load_balancer.decLoad(fd);
+    load_balancer.complete_task(fd, response->id);
     std::unique_lock lock(mailbox_mut);
     mailbox[response->id] = response;
     lock.unlock();

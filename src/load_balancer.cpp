@@ -13,6 +13,8 @@ void LoadBalancer::set_default_dispatch_callback() {
         ssize_t sent = send(worker, total_msg.c_str(), total_msg.size(), 0);
         if (sent > 0) {
             incLoad(worker);
+            std::unique_lock<std::mutex> lock(mutex_);
+            dispatched_tasks[worker].push_back(task);
             std::cout << "sent task " << task->id << " to worker " << worker << '\n';
         } else {
             std::cerr << "failed to send task to worker, keeping in queue\n";
@@ -31,6 +33,10 @@ void LoadBalancer::addWorker(int worker_socket) {
 void LoadBalancer::removeWorker(int worker_socket) {
     std::unique_lock<std::mutex> lock(mutex_);
     worker_loads_.erase(worker_socket);
+    for (std::shared_ptr<TaskRequest> task : dispatched_tasks[worker_socket]) {
+        tasks.push(task);
+    }
+    dispatched_tasks.erase(worker_socket);
 }
 
 void LoadBalancer::addTask(std::shared_ptr<TaskRequest> task) {
@@ -95,4 +101,14 @@ bool LoadBalancer::canDispatch() {
     );
     return stop || (!tasks.empty() && min_worker != worker_loads_.end() && min_worker->second <= 10);
     // need at least 1 task + at least one worker with load <= 10)
+}
+
+void LoadBalancer::complete_task(int worker, int task_id) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto it = dispatched_tasks[worker].begin(); it != dispatched_tasks[worker].end(); ++it) {
+        if ((*it)->id == task_id) {
+            dispatched_tasks[worker].erase(it);
+            break;
+        }
+    }
 }

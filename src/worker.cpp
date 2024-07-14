@@ -61,7 +61,7 @@ void Worker::executeTask(std::shared_ptr<TaskRequest> request) {
         std::cout << "worker executing task " << request->id << '\n';
 
         // TODO delay to make testing easier
-        // std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::seconds(2));
 
         TaskResponse response;
         if (auto return_val = router.eval_route(*request); return_val.has_value()) {
